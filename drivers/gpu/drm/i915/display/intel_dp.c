@@ -1334,7 +1334,8 @@ bool intel_dp_source_supports_tps3(struct drm_i915_private *i915)
 
 bool intel_dp_source_supports_tps4(struct drm_i915_private *i915)
 {
-	return DISPLAY_VER(i915) >= 10;
+	/* Skipping TPS4 to avoid Link training failure issue */
+	return false;
 }
 
 static void snprintf_int_array(char *str, size_t len,
