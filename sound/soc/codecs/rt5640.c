@@ -2985,6 +2985,7 @@ static int rt5640_i2c_probe(struct i2c_client *i2c)
 	struct rt5640_priv *rt5640;
 	int ret;
 	unsigned int val;
+	int i;
 
 	rt5640 = devm_kzalloc(&i2c->dev,
 				sizeof(struct rt5640_priv),
@@ -3012,7 +3013,15 @@ static int rt5640_i2c_probe(struct i2c_client *i2c)
 		return ret;
 	}
 
-	regmap_read(rt5640->regmap, RT5640_VENDOR_ID2, &val);
+	/* let's try 3 times when reading VENDOR_ID2 in case HW is not ready */
+	for (i = 0; i < 3; i++)	{
+		regmap_read(rt5640->regmap, RT5640_VENDOR_ID2, &val);
+		if (val == RT5640_DEVICE_ID)
+			break;
+
+		msleep(10);
+	}
+
 	if (val != RT5640_DEVICE_ID) {
 		dev_err(&i2c->dev,
 			"Device with ID register %#x is not rt5640/39\n", val);
