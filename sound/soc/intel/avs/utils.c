@@ -222,7 +222,8 @@ void avs_module_id_free(struct avs_dev *adev, u16 module_id, u8 instance_id)
 		goto exit;
 	}
 
-	ida_free(adev->mod_idas[idx], instance_id);
+	if (!ida_is_empty(adev->mod_idas[idx]))
+		ida_free(adev->mod_idas[idx], instance_id);
 exit:
 	mutex_unlock(&adev->modres_mutex);
 }
