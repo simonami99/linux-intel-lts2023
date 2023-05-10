@@ -912,7 +912,15 @@ static const struct dev_pm_ops alarmtimer_pm_ops = {
 static struct platform_driver alarmtimer_driver = {
 	.driver = {
 		.name = "alarmtimer",
+		/**
+		* skip alarm timer suspend/resume flow for Android
+		*  auto usage without ENABLE_ALARM_PM_OPS.
+		* we don't rely on RTC. We can set the timer to MCU
+		*  and MCU will wake the SoC
+		*/
+		#if defined(ENABLE_ALARM_PM_OPS)
 		.pm = &alarmtimer_pm_ops,
+		#endif /* ENABLE_ALARM_PM_OPS */
 	}
 };
 
