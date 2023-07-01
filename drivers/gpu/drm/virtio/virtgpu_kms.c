@@ -120,7 +120,7 @@ int virtio_gpu_find_vqs(struct virtio_gpu_device *vgdev)
 	struct virtqueue **vqs;
 	int i, total_vqs, err;
 	const char **names;
-	int ret;
+	int ret = 0;
 
 	total_vqs = vgdev->num_vblankq + 2;
 	vqs = kcalloc(total_vqs, sizeof(*vqs), GFP_KERNEL);
@@ -166,6 +166,7 @@ int virtio_gpu_init(struct virtio_device *vdev, struct drm_device *dev)
 	struct virtio_gpu_device *vgdev;
 	u32 num_scanouts, num_capsets;
 	int ret = 0;
+	int i;
 
 	if (!virtio_has_feature(vdev, VIRTIO_F_VERSION_1))
 		return -ENODEV;
@@ -305,6 +306,13 @@ int virtio_gpu_init(struct virtio_device *vdev, struct drm_device *dev)
 
 	if (num_capsets)
 		virtio_gpu_get_capsets(vgdev, num_capsets);
+
+	virtio_gpu_vblankq_notify(vgdev);
+
+	for(i=0; i < vgdev->num_vblankq; i++)
+		virtqueue_disable_cb(vgdev->vblank[i].vblank.vq);
+
+
 	if (vgdev->num_scanouts) {
 		if (vgdev->has_edid)
 			virtio_gpu_cmd_get_edids(vgdev);
