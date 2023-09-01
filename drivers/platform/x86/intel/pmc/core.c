@@ -1003,6 +1003,27 @@ static int pmc_core_pkgc_show(struct seq_file *s, void *unused)
 }
 DEFINE_SHOW_ATTRIBUTE(pmc_core_pkgc);
 
+static int pmc_core_pci_device_state_show(struct seq_file *s, void *unused)
+{
+	struct pci_dev *dev = NULL;
+	u32 d3_state = 0;
+	u16 pmcsr = 0;
+
+	for_each_pci_dev(dev) {
+		pci_read_config_word(dev, dev->pm_cap + PCI_PM_CTRL, &pmcsr);
+		d3_state = ((pmcsr & PCI_PM_CTRL_STATE_MASK) ==
+					(__force int)PCI_D3hot) ? 1 : 0;
+
+		seq_printf(s, "pci 0x%04x 0x%04x %s %20.20s: ",
+					dev->vendor, dev->device, dev_name(&dev->dev),
+					dev_driver_string(&dev->dev));
+		seq_printf(s, " d3:%x\n", d3_state);
+	}
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(pmc_core_pci_device_state);
+
 static bool pmc_core_pri_verify(u32 lpm_pri, u8 *mode_order)
 {
 	int i, j;
@@ -1172,6 +1193,9 @@ static void pmc_core_dbgfs_register(struct pmc_dev *pmcdev)
 				    pmcdev->dbgfs_dir, pmcdev,
 				    &pmc_core_substate_req_regs_fops);
 	}
+
+	debugfs_create_file("pci_device_state", 0444, dir, pmcdev,
+			    &pmc_core_pci_device_state_fops);
 }
 
 static const struct x86_cpu_id intel_pmc_core_ids[] = {
