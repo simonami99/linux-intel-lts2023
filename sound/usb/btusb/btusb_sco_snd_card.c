@@ -102,6 +102,7 @@ static const struct usb_device_id btusb_sco_table[] = {
 	{ USB_DEVICE(0x8087, 0x0aaa), .driver_info = BTUSB_INTEL_NEW },
 	{ USB_DEVICE(0x8087, 0x0aa7), .driver_info = BTUSB_INTEL_NEW },
 	{ USB_DEVICE(0x8087, 0x0033), .driver_info = BTUSB_INTEL_NEW },
+	{ USB_DEVICE(0x8087, 0x0032), .driver_info = BTUSB_INTEL_NEW },
 	{ }	/* Terminating entry */
 };
 
@@ -937,10 +938,8 @@ static int btusb_snd_card_create(struct btusb_data *data)
 					&btusb_isoc_playback_ops);
 	snd_pcm_lib_preallocate_pages_for_all(pcm,
 			SNDRV_DMA_TYPE_CONTINUOUS,
-			dev,
+			NULL,
 			64 * 1024, 64 * 1024);
-//			(void*)snd_dma_continuous_data(GFP_KERNEL),
-//			64 * 1024, 64 * 1024);
 	strlcpy(card->driver, "bt_audio_source", sizeof(card->driver));
 	strlcpy(card->shortname, card->driver, sizeof(card->shortname));
 	strlcpy(card->longname, "USB Bluetooth audio source",

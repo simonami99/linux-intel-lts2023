@@ -16,8 +16,6 @@ struct device;
 struct vm_area_struct;
 struct sg_table;
 
-
-#define snd_dma_continuous_data(x)      ((struct device *)(__force unsigned long)(x))
 /*
  * buffer device info
  */
