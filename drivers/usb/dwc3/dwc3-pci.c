@@ -373,7 +373,7 @@ static int dwc3_pci_probe(struct pci_dev *pci, const struct pci_device_id *id)
 		goto err;
 	}
 
-	device_init_wakeup(dev, true);
+	device_init_wakeup(dev, false);
 	pci_set_drvdata(pci, dwc);
 	pm_runtime_put(dev);
 #ifdef CONFIG_PM

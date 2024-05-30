@@ -2546,6 +2546,7 @@ static void __dwc3_gadget_set_speed(struct dwc3 *dwc)
 	reg = dwc3_readl(dwc->regs, DWC3_DCFG);
 	reg &= ~(DWC3_DCFG_SPEED_MASK);
 
+	speed = USB_SPEED_HIGH;
 	/*
 	 * WORKAROUND: DWC3 revision < 2.20a have an issue
 	 * which would cause metastability state on Run/Stop
