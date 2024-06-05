@@ -1088,7 +1088,8 @@ void i915_driver_shutdown(struct drm_i915_private *i915)
 	intel_suspend_encoders(i915);
 	intel_shutdown_encoders(i915);
 
-	intel_dmc_suspend(i915);
+	if (HAS_DISPLAY(i915))
+		intel_dmc_suspend(i915);
 
 	i915_gem_suspend(i915);
 
