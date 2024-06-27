@@ -121,6 +121,14 @@ void i915_gem_object_init(struct drm_i915_gem_object *obj,
 	obj->mm.madv = I915_MADV_WILLNEED;
 	INIT_RADIX_TREE(&obj->mm.get_page.radix, GFP_KERNEL | __GFP_NOWARN);
 	mutex_init(&obj->mm.get_page.lock);
+#if IS_ENABLED(CONFIG_DRM_I915_MEMTRACK)
+       /*
+        * Mark the object as not having backing pages, as no allocation
+        * for it yet
+        */
+       obj->has_backing_pages = 0;
+       INIT_LIST_HEAD(&obj->pid_info);
+#endif
 	INIT_RADIX_TREE(&obj->mm.get_dma_page.radix, GFP_KERNEL | __GFP_NOWARN);
 	mutex_init(&obj->mm.get_dma_page.lock);
 }
@@ -228,6 +236,13 @@ bool i915_gem_object_can_bypass_llc(struct drm_i915_gem_object *obj)
 	 * handing it to userspace, we need to prevent this.
 	 */
 	return (IS_JASPERLAKE(i915) || IS_ELKHARTLAKE(i915));
+}
+
+static int i915_gem_open_object(struct drm_gem_object *gem, struct drm_file *file)
+{
+        struct drm_i915_gem_object *obj = to_intel_bo(gem);
+
+        return i915_gem_obj_insert_pid(obj);
 }
 
 static void i915_gem_close_object(struct drm_gem_object *gem, struct drm_file *file)
@@ -384,6 +399,16 @@ void __i915_gem_free_object(struct drm_i915_gem_object *obj)
 	if (obj->base.import_attach)
 		drm_prime_gem_destroy(&obj->base, NULL);
 
+#if IS_ENABLED(CONFIG_DRM_I915_MEMTRACK)
+	if (!obj->stolen && (obj->has_backing_pages == 1)) {
+		struct drm_i915_private *dev_priv =
+		to_i915(obj->base.dev);
+
+		dev_priv->mm.phys_mem_total -= obj->base.size;
+		obj->has_backing_pages = 0;
+	}
+	i915_gem_obj_remove_all_pids(obj);
+#endif
 	drm_gem_free_mmap_offset(&obj->base);
 
 	if (obj->ops->release)
@@ -889,6 +914,7 @@ int __init i915_objects_module_init(void)
 
 static const struct drm_gem_object_funcs i915_gem_object_funcs = {
 	.free = i915_gem_free_object,
+	.open = i915_gem_open_object,
 	.close = i915_gem_close_object,
 	.export = i915_gem_prime_export,
 };

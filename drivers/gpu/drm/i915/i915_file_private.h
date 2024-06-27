@@ -21,6 +21,11 @@ struct drm_i915_file_private {
 		struct drm_file *file;
 		struct rcu_head rcu;
 	};
+#if IS_ENABLED(CONFIG_DRM_I915_MEMTRACK)
+	char *process_name;
+	struct pid *tgid;
+	struct bin_attribute *obj_attr;
+#endif
 
 	/** @proto_context_lock: Guards all struct i915_gem_proto_context
 	 * operations

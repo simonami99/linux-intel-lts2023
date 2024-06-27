@@ -281,6 +281,17 @@ static inline void intel_klog_error_capture(struct intel_gt *gt,
 
 #if IS_ENABLED(CONFIG_DRM_I915_CAPTURE_ERROR)
 
+#if IS_ENABLED(CONFIG_DRM_I915_MEMTRACK)
+void i915_error_puts(struct drm_i915_error_state_buf *e, const char *str);
+bool i915_error_ok(struct drm_i915_error_state_buf *e);
+int i915_obj_state_buf_init(struct drm_i915_error_state_buf *eb, size_t count);
+static inline void
+i915_error_state_buf_release(struct drm_i915_error_state_buf *eb)
+{
+	kfree(eb->buf);
+}
+#endif
+
 __printf(2, 3)
 void i915_error_printf(struct drm_i915_error_state_buf *e, const char *f, ...);
 void intel_gpu_error_print_vma(struct drm_i915_error_state_buf *m,
