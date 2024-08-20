@@ -314,7 +314,7 @@ int sw_register_dev(struct sw_file_ops *ops)
 	 */
 	ret = alloc_chrdev_region(&apwr_dev, 0, 1, PW_DEVICE_NAME);
 	apwr_dev_major_num = MAJOR(apwr_dev);
-	apwr_class = class_create(THIS_MODULE, "apwr");
+	apwr_class = class_create("apwr");
 	if (IS_ERR(apwr_class))
 		pw_pr_error("Error registering apwr class\n");
 
