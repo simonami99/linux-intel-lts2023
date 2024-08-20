@@ -73,6 +73,8 @@
 #include <linux/uaccess.h>
 #include <asm/unistd.h>
 #include <asm/mmu_context.h>
+#include <trace/hooks/mm.h>
+#include <trace/hooks/dtask.h>
 
 /*
  * The default value should be high enough to not crash a system that randomly
@@ -566,6 +568,7 @@ static void exit_mm(void)
 	task_unlock(current);
 	mmap_read_unlock(mm);
 	mm_update_next_owner(mm);
+	trace_android_vh_exit_mm(mm);
 	mmput(mm);
 	if (test_thread_flag(TIF_MEMDIE))
 		exit_oom_victim();
@@ -819,6 +822,7 @@ void __noreturn do_exit(long code)
 
 	WARN_ON(tsk->plug);
 
+	profile_task_exit(tsk);
 	kcov_task_exit(tsk);
 	kmsan_task_exit(tsk);
 
@@ -828,6 +832,8 @@ void __noreturn do_exit(long code)
 
 	io_uring_files_cancel();
 	exit_signals(tsk);  /* sets PF_EXITING */
+
+	trace_android_vh_exit_check(current);
 
 	/* sync mm's RSS info before statistics gathering */
 	if (tsk->mm)

@@ -49,6 +49,13 @@ static inline void count_compact_events(enum vm_event_item item, long delta)
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/compaction.h>
+#undef CREATE_TRACE_POINTS
+#include <trace/hooks/compaction.h>
+
+#undef CREATE_TRACE_POINTS
+#ifndef __GENKSYMS__
+#include <trace/hooks/mm.h>
+#endif
 
 #define block_start_pfn(pfn, order)	round_down(pfn, 1UL << (order))
 #define block_end_pfn(pfn, order)	ALIGN((pfn) + 1, 1UL << (order))
@@ -783,6 +790,31 @@ isolate_freepages_range(struct compact_control *cc,
 	/* We don't use freelists for anything. */
 	return pfn;
 }
+
+#ifdef CONFIG_COMPACTION
+unsigned long isolate_and_split_free_page(struct page *page,
+		struct list_head *list)
+{
+	unsigned long isolated;
+	unsigned int order;
+
+	if (!PageBuddy(page))
+		return 0;
+
+	order = buddy_order(page);
+	isolated = __isolate_free_page(page, order);
+	if (!isolated)
+		return 0;
+
+	set_page_private(page, order);
+	list_add(&page->lru, list);
+
+	split_map_pages(list);
+
+	return isolated;
+}
+EXPORT_SYMBOL_GPL(isolate_and_split_free_page);
+#endif
 
 /* Similar to reclaim, but different enough that they don't share logic */
 static bool too_many_isolated(struct compact_control *cc)
@@ -2171,6 +2203,7 @@ static enum compact_result __compact_finished(struct compact_control *cc)
 	unsigned int order;
 	const int migratetype = cc->migratetype;
 	int ret;
+	bool abort_compact = false;
 
 	/* Compaction run completes if the migrate and free scanner meet */
 	if (compact_scanners_met(cc)) {
@@ -2257,7 +2290,8 @@ static enum compact_result __compact_finished(struct compact_control *cc)
 	}
 
 out:
-	if (cc->contended || fatal_signal_pending(current))
+	trace_android_vh_compact_finished(&abort_compact);
+	if (cc->contended || fatal_signal_pending(current) || abort_compact)
 		ret = COMPACT_CONTENDED;
 
 	return ret;
@@ -2698,6 +2732,9 @@ enum compact_result try_to_compact_pages(gfp_t gfp_mask, unsigned int order,
 					ac->highest_zoneidx, ac->nodemask) {
 		enum compact_result status;
 
+		if (!zone_can_frag(zone))
+			continue;
+
 		if (prio > MIN_COMPACT_PRIORITY
 					&& compaction_deferred(zone, order)) {
 			rc = max_t(enum compact_result, COMPACT_DEFERRED, rc);
@@ -2739,7 +2776,7 @@ enum compact_result try_to_compact_pages(gfp_t gfp_mask, unsigned int order,
 					|| fatal_signal_pending(current))
 			break;
 	}
-
+	trace_android_vh_compaction_try_to_compact_exit(&rc);
 	return rc;
 }
 
@@ -2770,6 +2807,9 @@ static void proactive_compact_node(pg_data_t *pgdat)
 		if (!populated_zone(zone))
 			continue;
 
+		if (!zone_can_frag(zone))
+			continue;
+
 		cc.zone = zone;
 
 		compact_zone(&cc, NULL);
@@ -2780,6 +2820,38 @@ static void proactive_compact_node(pg_data_t *pgdat)
 				     cc.total_free_scanned);
 	}
 }
+
+/* Compact all zones within a node with MIGRATE_ASYNC */
+void compact_node_async(int nid)
+{
+	pg_data_t *pgdat = NODE_DATA(nid);
+	int zoneid;
+	struct zone *zone;
+	struct compact_control cc = {
+		.order = -1,
+		.mode = MIGRATE_ASYNC,
+		.ignore_skip_hint = true,
+		.whole_zone = true,
+		.gfp_mask = GFP_KERNEL,
+	};
+
+	for (zoneid = 0; zoneid < MAX_NR_ZONES; zoneid++) {
+		if (fatal_signal_pending(current))
+			break;
+
+		zone = &pgdat->node_zones[zoneid];
+		if (!populated_zone(zone))
+			continue;
+
+		if (!zone_can_frag(zone))
+			continue;
+
+		cc.zone = zone;
+
+		compact_zone(&cc, NULL);
+	}
+}
+EXPORT_SYMBOL_GPL(compact_node_async);
 
 /* Compact all zones within a node */
 static void compact_node(int nid)
@@ -2800,6 +2872,9 @@ static void compact_node(int nid)
 
 		zone = &pgdat->node_zones[zoneid];
 		if (!populated_zone(zone))
+			continue;
+
+		if (!zone_can_frag(zone))
 			continue;
 
 		cc.zone = zone;
@@ -2915,6 +2990,9 @@ static bool kcompactd_node_suitable(pg_data_t *pgdat)
 		if (!populated_zone(zone))
 			continue;
 
+		if (!zone_can_frag(zone))
+			continue;
+
 		/* Allocation can already succeed, check other zones */
 		if (zone_watermark_ok(zone, pgdat->kcompactd_max_order,
 				      min_wmark_pages(zone),
@@ -2996,6 +3074,7 @@ static void kcompactd_do_work(pg_data_t *pgdat)
 		count_compact_events(KCOMPACTD_FREE_SCANNED,
 				     cc.total_free_scanned);
 	}
+	trace_android_vh_compaction_exit(pgdat->node_id, cc.order, cc.highest_zoneidx);
 
 	/*
 	 * Regardless of success, we are done until woken up next. But remember

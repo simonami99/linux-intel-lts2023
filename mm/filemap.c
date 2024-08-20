@@ -36,6 +36,7 @@
 #include <linux/cpuset.h>
 #include <linux/hugetlb.h>
 #include <linux/memcontrol.h>
+#include <linux/cleancache.h>
 #include <linux/shmem_fs.h>
 #include <linux/rmap.h>
 #include <linux/delayacct.h>
@@ -51,6 +52,9 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/filemap.h>
+
+#undef CREATE_TRACE_POINTS
+#include <trace/hooks/mm.h>
 
 /*
  * FIXME: remove all knowledge of the buffer layer from the core VM
@@ -113,15 +117,19 @@
  *    ->i_pages lock		(try_to_unmap_one)
  *    ->lruvec->lru_lock	(follow_page->mark_page_accessed)
  *    ->lruvec->lru_lock	(check_pte_range->isolate_lru_page)
- *    ->private_lock		(page_remove_rmap->set_page_dirty)
- *    ->i_pages lock		(page_remove_rmap->set_page_dirty)
- *    bdi.wb->list_lock		(page_remove_rmap->set_page_dirty)
- *    ->inode->i_lock		(page_remove_rmap->set_page_dirty)
- *    ->memcg->move_lock	(page_remove_rmap->folio_memcg_lock)
+ *    ->private_lock		(folio_remove_rmap_pte->set_page_dirty)
+ *    ->i_pages lock		(folio_remove_rmap_pte->set_page_dirty)
+ *    bdi.wb->list_lock		(folio_remove_rmap_pte->set_page_dirty)
+ *    ->inode->i_lock		(folio_remove_rmap_pte->set_page_dirty)
+ *    ->memcg->move_lock	(folio_remove_rmap_pte->folio_memcg_lock)
  *    bdi.wb->list_lock		(zap_pte_range->set_page_dirty)
  *    ->inode->i_lock		(zap_pte_range->set_page_dirty)
  *    ->private_lock		(zap_pte_range->block_dirty_folio)
  */
+
+/* Export tracepoints that act as a bare tracehook */
+EXPORT_TRACEPOINT_SYMBOL_GPL(mm_filemap_delete_from_page_cache);
+EXPORT_TRACEPOINT_SYMBOL_GPL(mm_filemap_add_to_page_cache);
 
 static void page_cache_delete(struct address_space *mapping,
 				   struct folio *folio, void *shadow)
@@ -151,6 +159,16 @@ static void filemap_unaccount_folio(struct address_space *mapping,
 		struct folio *folio)
 {
 	long nr;
+
+	/*
+	 * if we're uptodate, flush out into the cleancache, otherwise
+	 * invalidate any existing cleancache entries.  We can't leave
+	 * stale data around in the cleancache once our page is gone
+	 */
+	if (folio_test_uptodate(folio) && folio_test_mappedtodisk(folio))
+		cleancache_put_page(&folio->page);
+	else
+		cleancache_invalidate_page(mapping, &folio->page);
 
 	VM_BUG_ON_FOLIO(folio_mapped(folio), folio);
 	if (!IS_ENABLED(CONFIG_DEBUG_VM) && unlikely(folio_mapped(folio))) {
@@ -1381,7 +1399,7 @@ void migration_entry_wait_on_locked(swp_entry_t entry, spinlock_t *ptl)
 	unsigned long pflags;
 	bool in_thrashing;
 	wait_queue_head_t *q;
-	struct folio *folio = page_folio(pfn_swap_entry_to_page(entry));
+	struct folio *folio = pfn_swap_entry_folio(entry);
 
 	q = folio_waitqueue(folio);
 	if (!folio_test_uptodate(folio) && folio_test_workingset(folio)) {
@@ -2425,6 +2443,8 @@ static int filemap_update_page(struct kiocb *iocb,
 {
 	int error;
 
+	trace_android_vh_filemap_update_page(mapping, folio, iocb->ki_filp);
+
 	if (iocb->ki_flags & IOCB_NOWAIT) {
 		if (!filemap_invalidate_trylock_shared(mapping))
 			return -EAGAIN;
@@ -2634,6 +2654,7 @@ ssize_t filemap_read(struct kiocb *iocb, struct iov_iter *iter,
 
 	iov_iter_truncate(iter, inode->i_sb->s_maxbytes);
 	folio_batch_init(&fbatch);
+	trace_android_vh_filemap_read(filp, iocb->ki_pos, iov_iter_count(iter));
 
 	do {
 		cond_resched();
@@ -3108,33 +3129,39 @@ unlock:
 static int lock_folio_maybe_drop_mmap(struct vm_fault *vmf, struct folio *folio,
 				     struct file **fpin)
 {
+	struct task_struct *tsk = NULL;
+
 	if (folio_trylock(folio))
 		return 1;
 
 	/*
 	 * NOTE! This will make us return with VM_FAULT_RETRY, but with
-	 * the mmap_lock still held. That's how FAULT_FLAG_RETRY_NOWAIT
+	 * the fault lock still held. That's how FAULT_FLAG_RETRY_NOWAIT
 	 * is supposed to work. We have way too many special cases..
 	 */
 	if (vmf->flags & FAULT_FLAG_RETRY_NOWAIT)
 		return 0;
 
 	*fpin = maybe_unlock_mmap_for_io(vmf, *fpin);
+	trace_android_vh_lock_folio_drop_mmap_start(&tsk, vmf, folio, *fpin);
 	if (vmf->flags & FAULT_FLAG_KILLABLE) {
 		if (__folio_lock_killable(folio)) {
 			/*
-			 * We didn't have the right flags to drop the mmap_lock,
-			 * but all fault_handlers only check for fatal signals
-			 * if we return VM_FAULT_RETRY, so we need to drop the
-			 * mmap_lock here and return 0 if we don't have a fpin.
+			 * We didn't have the right flags to drop the
+			 * fault lock, but all fault_handlers only check
+			 * for fatal signals if we return VM_FAULT_RETRY,
+			 * so we need to drop the fault lock here and
+			 * return 0 if we don't have a fpin.
 			 */
 			if (*fpin == NULL)
-				mmap_read_unlock(vmf->vma->vm_mm);
+				release_fault_lock(vmf);
+			trace_android_vh_lock_folio_drop_mmap_end(false, &tsk, vmf, folio, *fpin);
 			return 0;
 		}
 	} else
 		__folio_lock(folio);
 
+	trace_android_vh_lock_folio_drop_mmap_end(true, &tsk, vmf, folio, *fpin);
 	return 1;
 }
 
@@ -3181,7 +3208,10 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 
 	if (vm_flags & VM_SEQ_READ) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
+		trace_android_vh_page_cache_readahead_start(file, vmf->pgoff,
+				ra->ra_pages, true);
 		page_cache_sync_ra(&ractl, ra->ra_pages);
+		trace_android_vh_page_cache_readahead_end(file, vmf->pgoff);
 		return fpin;
 	}
 
@@ -3204,8 +3234,13 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	ra->start = max_t(long, 0, vmf->pgoff - ra->ra_pages / 2);
 	ra->size = ra->ra_pages;
 	ra->async_size = ra->ra_pages / 4;
+	trace_android_vh_tune_mmap_readaround(ra->ra_pages, vmf->pgoff,
+			&ra->start, &ra->size, &ra->async_size);
 	ractl._index = ra->start;
+	trace_android_vh_page_cache_readahead_start(file, vmf->pgoff,
+			ra->size, true);
 	page_cache_ra_order(&ractl, ra, 0);
+	trace_android_vh_page_cache_readahead_end(file, vmf->pgoff);
 	return fpin;
 }
 
@@ -3233,7 +3268,10 @@ static struct file *do_async_mmap_readahead(struct vm_fault *vmf,
 
 	if (folio_test_readahead(folio)) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
+		trace_android_vh_page_cache_readahead_start(file, vmf->pgoff,
+				ra->ra_pages, false);
 		page_cache_async_ra(&ractl, folio, ra->ra_pages);
+		trace_android_vh_page_cache_readahead_end(file, vmf->pgoff);
 	}
 	return fpin;
 }
@@ -3382,7 +3420,9 @@ page_not_uptodate:
 	 * and we need to check for errors.
 	 */
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
+	trace_android_vh_filemap_fault_start(file, vmf->pgoff);
 	error = filemap_read_folio(file, mapping->a_ops->read_folio, folio);
+	trace_android_vh_filemap_fault_end(file, vmf->pgoff);
 	if (fpin)
 		goto out_retry;
 	folio_put(folio);
@@ -3576,11 +3616,13 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 	struct folio *folio;
 	vm_fault_t ret = 0;
 	unsigned int nr_pages = 0, mmap_miss = 0, mmap_miss_saved;
+	pgoff_t first_pgoff = 0;
 
 	rcu_read_lock();
 	folio = next_uptodate_folio(&xas, mapping, end_pgoff);
 	if (!folio)
 		goto out;
+	first_pgoff = xas.xa_index;
 
 	if (filemap_map_pmd(vmf, folio, start_pgoff)) {
 		ret = VM_FAULT_NOPAGE;
@@ -3623,6 +3665,7 @@ out:
 		WRITE_ONCE(file->f_ra.mmap_miss, 0);
 	else
 		WRITE_ONCE(file->f_ra.mmap_miss, mmap_miss_saved - mmap_miss);
+	trace_android_vh_filemap_map_pages(file, first_pgoff, last_pgoff, ret);
 
 	return ret;
 }

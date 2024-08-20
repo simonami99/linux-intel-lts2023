@@ -1320,6 +1320,18 @@ static int dwc3_core_init(struct dwc3 *dwc)
 
 	dwc3_config_threshold(dwc);
 
+	/*
+	 * Modify this for all supported Super Speed ports when
+	 * multiport support is added.
+	 */
+	if (hw_mode != DWC3_GHWPARAMS0_MODE_GADGET &&
+	    (DWC3_IP_IS(DWC31)) &&
+	    dwc->maximum_speed == USB_SPEED_SUPER) {
+		reg = dwc3_readl(dwc->regs, DWC3_LLUCTL);
+		reg |= DWC3_LLUCTL_FORCE_GEN1;
+		dwc3_writel(dwc->regs, DWC3_LLUCTL, reg);
+	}
+
 	return 0;
 
 err_power_off_phy:
@@ -1463,6 +1475,7 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 	u8			tx_thr_num_pkt_prd = 0;
 	u8			tx_max_burst_prd = 0;
 	u8			tx_fifo_resize_max_num;
+	u16			num_hc_interrupters;
 	const char		*usb_psy_name;
 	int			ret;
 
@@ -1484,6 +1497,9 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 	 * for endpoints that have a large bMaxBurst value.
 	 */
 	tx_fifo_resize_max_num = 6;
+
+	/* default to a single XHCI interrupter */
+	num_hc_interrupters = 1;
 
 	dwc->maximum_speed = usb_get_maximum_speed(dev);
 	dwc->max_ssp_rate = usb_get_maximum_ssp_rate(dev);
@@ -1538,6 +1554,12 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 				&tx_thr_num_pkt_prd);
 	device_property_read_u8(dev, "snps,tx-max-burst-prd",
 				&tx_max_burst_prd);
+	device_property_read_u16(dev, "num-hc-interrupters",
+				&num_hc_interrupters);
+	/* DWC3 core allowed to have a max of 8 interrupters */
+	if (num_hc_interrupters > 8)
+		num_hc_interrupters = 8;
+
 	dwc->do_fifo_resize = device_property_read_bool(dev,
 							"tx-fifo-resize");
 	if (dwc->do_fifo_resize)
@@ -1626,6 +1648,8 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 	dwc->imod_interval = 0;
 
 	dwc->tx_fifo_resize_max_num = tx_fifo_resize_max_num;
+
+	dwc->num_hc_interrupters = num_hc_interrupters;
 }
 
 /* check whether the core supports IMOD */
@@ -2275,12 +2299,15 @@ static int dwc3_resume(struct device *dev)
 
 	pinctrl_pm_select_default_state(dev);
 
-	ret = dwc3_resume_common(dwc, PMSG_RESUME);
-	if (ret)
-		return ret;
-
 	pm_runtime_disable(dev);
 	pm_runtime_set_active(dev);
+
+	ret = dwc3_resume_common(dwc, PMSG_RESUME);
+	if (ret) {
+		pm_runtime_set_suspended(dev);
+		return ret;
+	}
+
 	pm_runtime_enable(dev);
 
 	return 0;
@@ -2345,6 +2372,12 @@ static struct platform_driver dwc3_driver = {
 };
 
 module_platform_driver(dwc3_driver);
+
+/*
+ * For type visibility (http://b/236036821)
+ */
+const struct dwc3 *const ANDROID_GKI_struct_dwc3;
+EXPORT_SYMBOL_GPL(ANDROID_GKI_struct_dwc3);
 
 MODULE_ALIAS("platform:dwc3");
 MODULE_AUTHOR("Felipe Balbi <balbi@ti.com>");

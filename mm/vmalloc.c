@@ -39,12 +39,16 @@
 #include <linux/overflow.h>
 #include <linux/pgtable.h>
 #include <linux/hugetlb.h>
+#include <linux/io.h>
 #include <linux/sched/mm.h>
 #include <asm/tlbflush.h>
 #include <asm/shmparam.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/vmalloc.h>
+
+#undef CREATE_TRACE_POINTS
+#include <trace/hooks/mm.h>
 
 #include "internal.h"
 #include "pgalloc-track.h"
@@ -309,12 +313,17 @@ int ioremap_page_range(unsigned long addr, unsigned long end,
 {
 	int err;
 
-	err = vmap_range_noflush(addr, end, phys_addr, pgprot_nx(prot),
+	prot = pgprot_nx(prot);
+	err = vmap_range_noflush(addr, end, phys_addr, prot,
 				 ioremap_max_page_shift);
 	flush_cache_vmap(addr, end);
 	if (!err)
 		err = kmsan_ioremap_page_range(addr, end, phys_addr, prot,
 					       ioremap_max_page_shift);
+
+	if (IS_ENABLED(CONFIG_ARCH_HAS_IOREMAP_PHYS_HOOKS) && !err)
+		ioremap_phys_range_hook(phys_addr, end - addr, prot);
+
 	return err;
 }
 
@@ -801,6 +810,7 @@ unsigned long vmalloc_nr_pages(void)
 {
 	return atomic_long_read(&nr_vmalloc_pages);
 }
+EXPORT_SYMBOL_GPL(vmalloc_nr_pages);
 
 /* Look up the first VA which satisfies addr < va_end, NULL if none. */
 static struct vmap_area *find_vmap_area_exceed_addr(unsigned long addr)
@@ -2378,6 +2388,11 @@ void vm_unmap_ram(const void *mem, unsigned int count)
 
 	debug_check_no_locks_freed((void *)va->va_start,
 				    (va->va_end - va->va_start));
+
+	if (IS_ENABLED(CONFIG_ARCH_HAS_IOREMAP_PHYS_HOOKS) && va->vm &&
+	    va->vm->flags & VM_IOREMAP)
+		iounmap_phys_range_hook(va->vm->phys_addr, get_vm_area_size(va->vm));
+
 	free_unmap_vmap_area(va);
 }
 EXPORT_SYMBOL(vm_unmap_ram);
@@ -2563,6 +2578,7 @@ static inline void setup_vmalloc_vm_locked(struct vm_struct *vm,
 	vm->size = va->va_end - va->va_start;
 	vm->caller = caller;
 	va->vm = vm;
+	trace_android_vh_save_vmalloc_stack(flags, vm);
 }
 
 static void setup_vmalloc_vm(struct vm_struct *vm, struct vmap_area *va,
@@ -2687,6 +2703,7 @@ struct vm_struct *find_vm_area(const void *addr)
 
 	return va->vm;
 }
+EXPORT_SYMBOL_GPL(find_vm_area);
 
 /**
  * remove_vm_area - find and remove a continuous kernel virtual area
@@ -4434,6 +4451,7 @@ static int s_show(struct seq_file *m, void *p)
 		seq_puts(m, " vpages");
 
 	show_numa_info(m, v);
+	trace_android_vh_show_stack_hash(m, v);
 	seq_putc(m, '\n');
 
 	/*
