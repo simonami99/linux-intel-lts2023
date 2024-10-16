@@ -244,9 +244,14 @@ static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
 		 */
 		if (unlikely(len != icsk->icsk_ack.rcv_mss)) {
 			u64 val = (u64)skb->len << TCP_RMEM_TO_WIN_SCALE;
+			u8 old_ratio = tcp_sk(sk)->scaling_ratio;
 
 			do_div(val, skb->truesize);
 			tcp_sk(sk)->scaling_ratio = val ? val : 1;
+
+			if (old_ratio != tcp_sk(sk)->scaling_ratio)
+				WRITE_ONCE(tcp_sk(sk)->window_clamp,
+					   tcp_win_from_space(sk, sk->sk_rcvbuf));
 		}
 		icsk->icsk_ack.rcv_mss = min_t(unsigned int, len,
 					       tcp_sk(sk)->advmss);
@@ -773,14 +778,6 @@ void tcp_rcv_space_adjust(struct sock *sk)
 				WRITE_ONCE(tp->window_clamp,
 					   tcp_win_from_space(sk, rcvbuf));
 			}
-		} else {
-			/* Make the window clamp follow along while being bounded
-			 * by SO_RCVBUF.
-			 */
-			int clamp = tcp_win_from_space(sk, min(rcvbuf, sk->sk_rcvbuf));
-
-			if (clamp > tp->window_clamp)
-				WRITE_ONCE(tp->window_clamp, clamp);
 		}
 	}
 	tp->rcvq_space.space = copied;
