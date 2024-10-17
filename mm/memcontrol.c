@@ -5293,6 +5293,7 @@ static int mem_cgroup_alloc_id(void)
 static void mem_cgroup_id_remove(struct mem_cgroup *memcg)
 {
 	if (memcg->id.id > 0) {
+		trace_android_vh_mem_cgroup_id_remove(memcg);
 		spin_lock(&memcg_idr_lock);
 		idr_remove(&mem_cgroup_idr, memcg->id.id);
 		spin_unlock(&memcg_idr_lock);

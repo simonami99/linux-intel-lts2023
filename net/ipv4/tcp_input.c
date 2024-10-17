@@ -754,7 +754,8 @@ void tcp_rcv_space_adjust(struct sock *sk)
 	 * <prev RTT . ><current RTT .. ><next RTT .... >
 	 */
 
-	if (READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_moderate_rcvbuf)) {
+	if (READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_moderate_rcvbuf) &&
+	    !(sk->sk_userlocks & SOCK_RCVBUF_LOCK)) {
 		u64 rcvwin, grow;
 		int rcvbuf;
 
@@ -770,14 +771,12 @@ void tcp_rcv_space_adjust(struct sock *sk)
 
 		rcvbuf = min_t(u64, tcp_space_from_win(sk, rcvwin),
 			       READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_rmem[2]));
-		if (!(sk->sk_userlocks & SOCK_RCVBUF_LOCK)) {
-			if (rcvbuf > sk->sk_rcvbuf) {
-				WRITE_ONCE(sk->sk_rcvbuf, rcvbuf);
+		if (rcvbuf > sk->sk_rcvbuf) {
+			WRITE_ONCE(sk->sk_rcvbuf, rcvbuf);
 
-				/* Make the window clamp follow along.  */
-				WRITE_ONCE(tp->window_clamp,
-					   tcp_win_from_space(sk, rcvbuf));
-			}
+			/* Make the window clamp follow along.  */
+			WRITE_ONCE(tp->window_clamp,
+				   tcp_win_from_space(sk, rcvbuf));
 		}
 	}
 	tp->rcvq_space.space = copied;
