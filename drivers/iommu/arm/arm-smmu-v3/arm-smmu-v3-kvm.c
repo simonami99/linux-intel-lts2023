@@ -72,7 +72,7 @@ extern struct kvm_iommu_ops kvm_nvhe_sym(smmu_ops);
 static int atomic_pages;
 module_param(atomic_pages, int, 0);
 
-static int kvm_arm_smmu_topup_memcache(struct arm_smccc_res *res)
+static int kvm_arm_smmu_topup_memcache(struct arm_smccc_res *res, gfp_t gfp)
 {
 	struct kvm_hyp_req req;
 
@@ -89,8 +89,10 @@ static int kvm_arm_smmu_topup_memcache(struct arm_smccc_res *res)
 	}
 
 	if (req.mem.dest == REQ_MEM_DEST_HYP_IOMMU) {
-		return __pkvm_topup_hyp_alloc_mgt(HYP_ALLOC_MGT_IOMMU_ID,
-+					 	  req.mem.nr_pages, req.mem.sz_alloc);
+		return __pkvm_topup_hyp_alloc_mgt_gfp(HYP_ALLOC_MGT_IOMMU_ID,
+						      req.mem.nr_pages,
+						      req.mem.sz_alloc,
+						      gfp);
 	} else if (req.mem.dest == REQ_MEM_DEST_HYP_ALLOC) {
 		/* Fill hyp alloc*/
 		return __pkvm_topup_hyp_alloc(req.mem.nr_pages);
@@ -108,7 +110,7 @@ static int kvm_arm_smmu_topup_memcache(struct arm_smccc_res *res)
 	struct arm_smccc_res __res;					\
 	do {								\
 		__res = kvm_call_hyp_nvhe_smccc(__VA_ARGS__);		\
-	} while (__res.a1 && !kvm_arm_smmu_topup_memcache(&__res));\
+	} while (__res.a1 && !kvm_arm_smmu_topup_memcache(&__res, GFP_KERNEL));\
 	__res.a1;							\
 })
 
@@ -167,15 +169,6 @@ static struct iommu_device *kvm_arm_smmu_probe_device(struct device *dev)
 err_free:
 	kfree(master);
 	return ERR_PTR(ret);
-}
-
-static void kvm_arm_smmu_release_device(struct device *dev)
-{
-	struct kvm_arm_smmu_master *master = dev_iommu_priv_get(dev);
-
-	xa_destroy(&master->domains);
-	kfree(master);
-	iommu_fwspec_free(dev);
 }
 
 static struct iommu_domain *kvm_arm_smmu_domain_alloc(unsigned type)
@@ -308,6 +301,17 @@ static int kvm_arm_smmu_detach_dev(struct host_arm_smmu_device *host_smmu,
 	return kvm_arm_smmu_detach_dev_pasid(host_smmu, master, 0);
 }
 
+static void kvm_arm_smmu_release_device(struct device *dev)
+{
+	struct kvm_arm_smmu_master *master = dev_iommu_priv_get(dev);
+	struct host_arm_smmu_device *host_smmu = smmu_to_host(master->smmu);
+
+	kvm_arm_smmu_detach_dev(host_smmu, master);
+	xa_destroy(&master->domains);
+	kfree(master);
+	iommu_fwspec_free(dev);
+}
+
 static void kvm_arm_smmu_remove_dev_pasid(struct device *dev, ioasid_t pasid)
 {
 	struct kvm_arm_smmu_master *master = dev_iommu_priv_get(dev);
@@ -395,7 +399,7 @@ static int kvm_arm_smmu_map_pages(struct iommu_domain *domain,
 		WARN_ON(mapped > pgcount * pgsize);
 		pgcount -= mapped / pgsize;
 		*total_mapped += mapped;
-	} while (*total_mapped < size && !kvm_arm_smmu_topup_memcache(&res));
+	} while (*total_mapped < size && !kvm_arm_smmu_topup_memcache(&res, gfp));
 	if (*total_mapped < size)
 		return -EINVAL;
 
@@ -430,7 +434,7 @@ static size_t kvm_arm_smmu_unmap_pages(struct iommu_domain *domain,
 		 * block mapping.
 		 */
 	} while (total_unmapped < size &&
-		 (unmapped || !kvm_arm_smmu_topup_memcache(&res)));
+		 (unmapped || !kvm_arm_smmu_topup_memcache(&res, GFP_ATOMIC)));
 
 	return total_unmapped;
 }

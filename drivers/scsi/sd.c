@@ -3840,6 +3840,7 @@ static int sd_start_stop_device(struct scsi_disk *sdkp, int start)
 	const struct scsi_exec_args exec_args = {
 		.sshdr = &sshdr,
 		.req_flags = BLK_MQ_REQ_PM,
+		.scmd_flags = SCMD_RETRY_PASSTHROUGH,
 	};
 	struct scsi_device *sdp = sdkp->device;
 	int res;
@@ -3972,7 +3973,7 @@ static int sd_resume(struct device *dev)
 static int sd_resume_common(struct device *dev, bool runtime)
 {
 	struct scsi_disk *sdkp = dev_get_drvdata(dev);
-	int ret;
+	int ret = 0;
 
 	if (!sdkp)	/* E.g.: runtime resume at the start of sd_probe() */
 		return 0;
@@ -3982,8 +3983,11 @@ static int sd_resume_common(struct device *dev, bool runtime)
 		return 0;
 	}
 
-	sd_printk(KERN_NOTICE, sdkp, "Starting disk\n");
-	ret = sd_start_stop_device(sdkp, 1);
+	if (!sdkp->device->no_start_on_resume) {
+		sd_printk(KERN_NOTICE, sdkp, "Starting disk\n");
+		ret = sd_start_stop_device(sdkp, 1);
+	}
+
 	if (!ret) {
 		sd_resume(dev);
 		sdkp->suspended = false;

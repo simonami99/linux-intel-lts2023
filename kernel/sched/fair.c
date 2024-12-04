@@ -8393,6 +8393,14 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 
 	cfs_rq = cfs_rq_of(se);
 	update_curr(cfs_rq);
+
+	trace_android_rvh_check_preempt_wakeup(rq, p, &preempt, &ignore,
+				wake_flags, se, pse, next_buddy_marked);
+	if (preempt)
+		goto preempt;
+	if (ignore)
+		return;
+
 	/*
 	 * XXX pick_eevdf(cfs_rq) != se ?
 	 */

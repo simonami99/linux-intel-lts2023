@@ -264,6 +264,9 @@ enum mthp_stat_item {
 	MTHP_STAT_ANON_FAULT_FALLBACK_CHARGE,
 	MTHP_STAT_SWPOUT,
 	MTHP_STAT_SWPOUT_FALLBACK,
+	MTHP_STAT_SPLIT,
+	MTHP_STAT_SPLIT_FAILED,
+	MTHP_STAT_SPLIT_DEFERRED,
 	__MTHP_STAT_COUNT
 };
 
@@ -281,9 +284,14 @@ static inline void count_mthp_stat(int order, enum mthp_stat_item item)
 
 	this_cpu_inc(mthp_stats.stats[order][item]);
 }
+unsigned long sum_mthp_stat(int order, enum mthp_stat_item item);
 #else
 static inline void count_mthp_stat(int order, enum mthp_stat_item item)
 {
+}
+unsigned long sum_mthp_stat(int order, enum mthp_stat_item item)
+{
+	return 0;
 }
 #endif
 

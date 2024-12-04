@@ -86,6 +86,7 @@
   lookup_one_len_unlocked
   mem_cgroup_from_id
   mem_cgroup_update_lru_size
+  memcg_page_state
   memory_cgrp_subsys
   memory_cgrp_subsys_enabled_key
   mipi_dsi_generic_write
@@ -199,6 +200,7 @@
   __traceiter_android_vh_alloc_oem_binder_struct
   __traceiter_android_vh_alloc_pages_failure_bypass
   __traceiter_android_vh_alloc_pages_reclaim_bypass
+  __traceiter_android_rvh_alloc_workqueue
   __traceiter_android_vh_alter_mutex_list_add
   __traceiter_android_vh_binder_alloc_new_buf_locked
   __traceiter_android_vh_binder_buffer_release
@@ -345,6 +347,7 @@
   __tracepoint_android_vh_alloc_oem_binder_struct
   __tracepoint_android_vh_alloc_pages_failure_bypass
   __tracepoint_android_vh_alloc_pages_reclaim_bypass
+  __tracepoint_android_rvh_alloc_workqueue
   __tracepoint_android_vh_alter_mutex_list_add
   __tracepoint_android_vh_binder_alloc_new_buf_locked
   __tracepoint_android_vh_binder_buffer_release
@@ -519,3 +522,13 @@
   xt_register_match
   xt_unregister_match
   zero_pfn
+  crypto_register_scomp
+  crypto_unregister_scomp
+  zstd_get_params
+  zstd_compress_cctx
+  zstd_is_error
+  zstd_decompress_dctx
+  zstd_cctx_workspace_bound
+  zstd_init_cctx
+  zstd_dctx_workspace_bound
+  zstd_init_dctx

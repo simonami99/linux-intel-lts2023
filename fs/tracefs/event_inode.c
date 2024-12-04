@@ -83,8 +83,6 @@ static void release_ei(struct kref *ref)
 	kfree(ei->entry_attrs);
 	kfree_const(ei->name);
 	kfree_rcu(ei, rcu);
-
-	call_srcu(&eventfs_srcu, &ei->rcu, free_ei_rcu);
 }
 
 static inline void put_ei(struct eventfs_inode *ei)
@@ -733,7 +731,7 @@ struct eventfs_inode *eventfs_create_dir(const char *name, struct eventfs_inode 
 
 	/* Was the parent freed? */
 	if (list_empty(&ei->list)) {
-		cleanup_ei(ei);
+		free_ei(ei);
 		ei = ERR_PTR(-EBUSY);
 	}
 	return ei;

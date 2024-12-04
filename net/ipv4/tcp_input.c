@@ -2111,10 +2111,6 @@ void tcp_clear_retrans(struct tcp_sock *tp)
 	tp->undo_marker = 0;
 	tp->undo_retrans = -1;
 	tp->sacked_out = 0;
-	tp->rto_stamp = 0;
-	tp->total_rto = 0;
-	tp->total_rto_recoveries = 0;
-	tp->total_rto_time = 0;
 }
 
 static inline void tcp_init_undo(struct tcp_sock *tp)
@@ -2906,14 +2902,6 @@ void tcp_enter_recovery(struct sock *sk, bool ece_ack)
 	tcp_set_ca_state(sk, TCP_CA_Recovery);
 }
 
-static void tcp_update_rto_time(struct tcp_sock *tp)
-{
-	if (tp->rto_stamp) {
-		tp->total_rto_time += tcp_time_stamp(tp) - tp->rto_stamp;
-		tp->rto_stamp = 0;
-	}
-}
-
 /* Process an ACK in CA_Loss state. Move to CA_Open if lost data are
  * recovered or spurious. Otherwise retransmits more on partial ACKs.
  */
@@ -3118,8 +3106,6 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 		break;
 	case TCP_CA_Loss:
 		tcp_process_loss(sk, flag, num_dupack, rexmit);
-		if (icsk->icsk_ca_state != TCP_CA_Loss)
-			tcp_update_rto_time(tp);
 		tcp_identify_packet_loss(sk, ack_flag);
 		if (!(icsk->icsk_ca_state == TCP_CA_Open ||
 		      (*ack_flag & FLAG_LOST_RETRANS)))
@@ -6120,6 +6106,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 
 			__tcp_ack_snd_check(sk, 0);
 no_ack:
+			trace_android_vh_tcp_rcv_established_fast_path(sk);
 			if (eaten)
 				kfree_skb_partial(skb, fragstolen);
 			tcp_data_ready(sk);
@@ -6159,6 +6146,8 @@ step5:
 
 	tcp_data_snd_check(sk);
 	tcp_ack_snd_check(sk);
+
+	trace_android_vh_tcp_rcv_established_slow_path(sk);
 	return;
 
 csum_error:
@@ -6567,17 +6556,9 @@ static void tcp_rcv_synrecv_state_fastopen(struct sock *sk)
 	if (inet_csk(sk)->icsk_ca_state == TCP_CA_Loss && !tp->packets_out)
 		tcp_try_undo_recovery(sk);
 
-	tcp_update_rto_time(tp);
+	/* Reset rtx states to prevent spurious retransmits_timed_out() */
+	tp->retrans_stamp = 0;
 	inet_csk(sk)->icsk_retransmits = 0;
-	/* In tcp_fastopen_synack_timer() on the first SYNACK RTO we set
-	 * retrans_stamp but don't enter CA_Loss, so in case that happened we
-	 * need to zero retrans_stamp here to prevent spurious
-	 * retransmits_timed_out(). However, if the ACK of our SYNACK caused us
-	 * to enter CA_Recovery then we need to leave retrans_stamp as it was
-	 * set entering CA_Recovery, for correct retransmits_timed_out() and
-	 * undo behavior.
-	 */
-	tcp_retrans_stamp_cleanup(sk);
 
 	/* Once we leave TCP_SYN_RECV or TCP_FIN_WAIT_1,
 	 * we no longer need req so release it.

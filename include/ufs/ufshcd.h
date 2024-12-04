@@ -685,6 +685,12 @@ enum ufshcd_android_quirks {
 	 * keys were stored in it.
 	 */
 	UFSHCD_ANDROID_QUIRK_KEYS_IN_PRDT		= 1 << 2,
+
+	/*
+	 * Use 36-bit DMA no matter whether or not the controller reports
+	 * 64-bit addressing support.
+	 */
+	UFSHCD_ANDROID_QUIRK_36BIT_ADDRESS_DMA		= 1 << 3,
 };
 
 enum ufshcd_caps {
@@ -1109,7 +1115,6 @@ struct ufs_hba {
 	bool ext_iid_sup;
 	bool scsi_host_added;
 	bool mcq_sup;
-	bool lsdb_sup;
 	bool mcq_enabled;
 	struct ufshcd_res_info res[RES_MAX];
 	void __iomem *mcq_base;

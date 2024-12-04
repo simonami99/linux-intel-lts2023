@@ -64,25 +64,8 @@ static inline bool sbitmap_deferred_clear(struct sbitmap_word *map)
 {
 	unsigned long mask;
 
-	guard(raw_spinlock_irqsave)(&map->swap_lock);
-
-	if (!map->cleared) {
-		if (depth == 0)
-			return false;
-
-		word_mask = (~0UL) >> (BITS_PER_LONG - depth);
-		/*
-		 * The current behavior is to always retry after moving
-		 * ->cleared to word, and we change it to retry in case
-		 * of any free bits. To avoid an infinite loop, we need
-		 * to take wrap & alloc_hint into account, otherwise a
-		 * soft lockup may occur.
-		 */
-		if (!wrap && alloc_hint)
-			word_mask &= ~((1UL << alloc_hint) - 1);
-
-		return (READ_ONCE(map->word) & word_mask) != word_mask;
-	}
+	if (!READ_ONCE(map->cleared))
+		return false;
 
 	/*
 	 * First get a stable cleared mask, setting the old mask to 0.
@@ -132,9 +115,6 @@ int sbitmap_init_node(struct sbitmap *sb, unsigned int depth, int shift,
 		free_percpu(sb->alloc_hint);
 		return -ENOMEM;
 	}
-
-	for (i = 0; i < sb->map_nr; i++)
-		raw_spin_lock_init(&sb->map[i].swap_lock);
 
 	return 0;
 }
