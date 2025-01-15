@@ -932,6 +932,10 @@ static int __trace_kprobe_create(int argc, const char *argv[])
 		argc = new_argc;
 		argv = new_argv;
 	}
+	if (argc > MAX_TRACE_ARGS) {
+		ret = -E2BIG;
+		goto out;
+	}
 
 	/* setup a probe */
 	tk = alloc_trace_kprobe(group, event, addr, symbol, offset, maxactive,
@@ -944,7 +948,7 @@ static int __trace_kprobe_create(int argc, const char *argv[])
 	}
 
 	/* parse arguments */
-	for (i = 0; i < argc && i < MAX_TRACE_ARGS; i++) {
+	for (i = 0; i < argc; i++) {
 		trace_probe_log_set_index(i + 2);
 		ctx.offset = 0;
 		ret = traceprobe_parse_probe_arg(&tk->tp, i, argv[i], &ctx);
@@ -1257,6 +1261,12 @@ static const struct file_operations kprobe_events_ops = {
 	.write		= probes_write,
 };
 
+static unsigned long trace_kprobe_missed(struct trace_kprobe *tk)
+{
+	return trace_kprobe_is_return(tk) ?
+		tk->rp.kp.nmissed + tk->rp.nmissed : tk->rp.kp.nmissed;
+}
+
 /* Probes profiling interfaces */
 static int probes_profile_seq_show(struct seq_file *m, void *v)
 {
@@ -1268,8 +1278,7 @@ static int probes_profile_seq_show(struct seq_file *m, void *v)
 		return 0;
 
 	tk = to_trace_kprobe(ev);
-	nmissed = trace_kprobe_is_return(tk) ?
-		tk->rp.kp.nmissed + tk->rp.nmissed : tk->rp.kp.nmissed;
+	nmissed = trace_kprobe_missed(tk);
 	seq_printf(m, "  %-44s %15lu %15lu\n",
 		   trace_probe_name(&tk->tp),
 		   trace_kprobe_nhit(tk),
@@ -1643,7 +1652,8 @@ NOKPROBE_SYMBOL(kretprobe_perf_func);
 
 int bpf_get_kprobe_info(const struct perf_event *event, u32 *fd_type,
 			const char **symbol, u64 *probe_offset,
-			u64 *probe_addr, bool perf_type_tracepoint)
+			u64 *probe_addr, unsigned long *missed,
+			bool perf_type_tracepoint)
 {
 	const char *pevent = trace_event_name(event->tp_event);
 	const char *group = event->tp_event->class->system;
@@ -1662,6 +1672,8 @@ int bpf_get_kprobe_info(const struct perf_event *event, u32 *fd_type,
 	*probe_addr = kallsyms_show_value(current_cred()) ?
 		      (unsigned long)tk->rp.kp.addr : 0;
 	*symbol = tk->symbol;
+	if (missed)
+		*missed = trace_kprobe_missed(tk);
 	return 0;
 }
 #endif	/* CONFIG_PERF_EVENTS */

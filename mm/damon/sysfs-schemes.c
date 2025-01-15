@@ -1687,8 +1687,8 @@ static struct damos *damon_sysfs_mk_scheme(
 		.low = sysfs_wmarks->low,
 	};
 
-	scheme = damon_new_scheme(&pattern, sysfs_scheme->action,
-			sysfs_scheme->apply_interval_us, &quota, &wmarks);
+	scheme = damon_new_scheme(&pattern, sysfs_scheme->action, 0, &quota,
+			&wmarks);
 	if (!scheme)
 		return NULL;
 
