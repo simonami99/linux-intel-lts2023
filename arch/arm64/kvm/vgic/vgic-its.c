@@ -855,9 +855,6 @@ static int vgic_its_cmd_handle_discard(struct kvm *kvm, struct vgic_its *its,
 
 	ite = find_ite(its, device_id, event_id);
 	if (ite && its_is_collection_mapped(ite->collection)) {
-		struct its_device *device = find_its_device(its, device_id);
-		int ite_esz = vgic_its_get_abi(its)->ite_esz;
-		gpa_t gpa = device->itt_addr + ite->event_id * ite_esz;
 		/*
 		 * Though the spec talks about removing the pending state, we
 		 * don't bother here since we clear the ITTE anyway and the
@@ -866,8 +863,7 @@ static int vgic_its_cmd_handle_discard(struct kvm *kvm, struct vgic_its *its,
 		vgic_its_invalidate_cache(kvm);
 
 		its_free_ite(kvm, ite);
-
-		return vgic_its_write_entry_lock(its, gpa, 0, ite_esz);
+		return 0;
 	}
 
 	return E_ITS_DISCARD_UNMAPPED_INTERRUPT;

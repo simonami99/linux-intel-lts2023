@@ -1481,7 +1481,7 @@ static int kdamond_fn(void *data)
 		sample_interval = ctx->attrs.sample_interval ?
 			ctx->attrs.sample_interval : 1;
 		if (ctx->passed_sample_intervals >= next_aggregation_sis) {
-					ctx->next_aggregation_sis = next_aggregation_sis +
+			ctx->next_aggregation_sis = next_aggregation_sis +
 				ctx->attrs.aggr_interval / sample_interval;
 
 			kdamond_reset_aggregated(ctx);

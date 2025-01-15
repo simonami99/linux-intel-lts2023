@@ -2924,7 +2924,6 @@ expanded:
 
 	trace_android_vh_mmap_region(vma, addr);
 
-	validate_mm(mm);
 	return addr;
 
 unmap_and_free_file_vma:

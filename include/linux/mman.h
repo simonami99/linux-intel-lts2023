@@ -2,7 +2,9 @@
 #ifndef _LINUX_MMAN_H
 #define _LINUX_MMAN_H
 
+#ifndef __GENKSYMS__
 #include <linux/fs.h>
+#endif
 #include <linux/mm.h>
 #include <linux/percpu_counter.h>
 
@@ -152,7 +154,7 @@ calc_vm_prot_bits(unsigned long prot, unsigned long pkey)
  * Combine the mmap "flags" argument into "vm_flags" used internally.
  */
 static inline unsigned long
-calc_vm_flag_bits(struct file *file, unsigned long flags)
+__calc_vm_flag_bits(struct file *file, unsigned long flags)
 {
 	return _calc_vm_trans(flags, MAP_GROWSDOWN,  VM_GROWSDOWN ) |
 	       _calc_vm_trans(flags, MAP_LOCKED,     VM_LOCKED    ) |
