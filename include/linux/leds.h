@@ -244,7 +244,7 @@ struct led_classdev {
 	struct kernfs_node	*brightness_hw_changed_kn;
 #endif
 
-	/* Ensures consistent access to the LED Flash Class device */
+	/* Ensures consistent access to the LED class device */
 	struct mutex		led_access;
 };
 
@@ -528,12 +528,6 @@ static inline void led_set_trigger_data(struct led_classdev *led_cdev,
 static inline void *led_get_trigger_data(struct led_classdev *led_cdev)
 {
 	return led_cdev->trigger_data;
-}
-
-static inline enum led_brightness
-led_trigger_get_brightness(const struct led_trigger *trigger)
-{
-	return trigger ? trigger->brightness : LED_OFF;
 }
 
 #define module_led_trigger(__led_trigger) \

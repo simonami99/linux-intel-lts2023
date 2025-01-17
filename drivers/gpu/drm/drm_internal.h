@@ -81,9 +81,6 @@ void drm_prime_remove_buf_handle(struct drm_prime_file_private *prime_fpriv,
 #define DRM_MAGIC_HASH_ORDER \
        4 /**< Size of key hash table. Must be power of 2. */
 #endif
-/* drm_drv.c */
-struct drm_minor *drm_minor_acquire(unsigned int minor_id);
-void drm_minor_release(struct drm_minor *minor);
 
 /* drm_managed.c */
 void drm_managed_release(struct drm_device *dev);

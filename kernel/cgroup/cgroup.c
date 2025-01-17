@@ -1315,9 +1315,14 @@ static void cgroup_exit_root_id(struct cgroup_root *root)
 	idr_remove(&cgroup_hierarchy_idr, root->hierarchy_id);
 }
 
+static void __cgroup_free_root(struct rcu_head *rcu)
+{
+	kfree(container_of(rcu, struct cgroup_root, rcu));
+}
+
 void cgroup_free_root(struct cgroup_root *root)
 {
-	kfree_rcu(root, rcu);
+	call_rcu(&root->rcu, __cgroup_free_root);
 }
 
 static void cgroup_destroy_root(struct cgroup_root *root)
@@ -1833,9 +1838,9 @@ int rebind_subsystems(struct cgroup_root *dst_root, u16 ss_mask)
 		RCU_INIT_POINTER(scgrp->subsys[ssid], NULL);
 		rcu_assign_pointer(dcgrp->subsys[ssid], css);
 		ss->root = dst_root;
-		css->cgroup = dcgrp;
 
 		spin_lock_irq(&css_set_lock);
+		css->cgroup = dcgrp;
 		WARN_ON(!list_empty(&dcgrp->e_csets[ss->id]));
 		list_for_each_entry_safe(cset, cset_pos, &scgrp->e_csets[ss->id],
 					 e_cset_node[ss->id]) {

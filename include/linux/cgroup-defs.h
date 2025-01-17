@@ -562,7 +562,6 @@ struct cgroup_root {
 
 	/* A list running through the active hierarchies */
 	struct list_head root_list;
-	struct rcu_head rcu;	/* Must be near the top */
 
 	/*
 	 * The root cgroup. The containing cgroup_root will be destroyed on its
@@ -586,7 +585,8 @@ struct cgroup_root {
 	/* The name for this hierarchy - may be empty */
 	char name[MAX_CGROUP_ROOT_NAMELEN];
 
-	ANDROID_BACKPORT_RESERVE_ARRAY(1, CGROUP_SUBSYS_COUNT * sizeof(atomic_t));
+	ANDROID_BACKPORT_USE_ARRAY(1, CGROUP_SUBSYS_COUNT * sizeof(atomic_t),
+				   struct rcu_head rcu);
 };
 
 /*

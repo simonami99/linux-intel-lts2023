@@ -1277,7 +1277,8 @@ release:
 	if (hw->mac.type == e1000_pch_mtp) {
 		ret_val = e1000e_force_smbus(hw);
 		if (ret_val)
-			e_dbg("Failed to force SMBUS over MTL system: %d\n", ret_val);
+			e_dbg("Failed to force SMBUS over MTL system: %d\n",
+			      ret_val);
 	}
 
 	hw->phy.ops.release(hw);
@@ -2628,7 +2629,7 @@ void e1000_copy_rx_addrs_to_phy_ich8lan(struct e1000_hw *hw)
 		hw->phy.ops.write_reg_page(hw, BM_RAR_H(i),
 					   (u16)(mac_reg & 0xFFFF));
 		hw->phy.ops.write_reg_page(hw, BM_RAR_CTRL(i),
-					   FIELD_GET(E1000_RAH_AV, mac_reg));
+					   (u16)((mac_reg & E1000_RAH_AV) >> 16));
 	}
 
 	e1000_disable_phy_wakeup_reg_access_bm(hw, &phy_reg);
