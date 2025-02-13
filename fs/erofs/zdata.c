@@ -1674,7 +1674,7 @@ static void z_erofs_submit_queue(struct z_erofs_decompress_frontend *f,
 
 			if (bio && (cur != last_pa ||
 				    last_bdev != mdev.m_bdev)) {
-drain_io:
+submit_bio_retry:
 				submit_bio(bio);
 				if (memstall) {
 					psi_memstall_leave(&pflags);
@@ -1706,7 +1706,7 @@ drain_io:
 			DBG_BUGON(bvec.bv_len < sb->s_blocksize);
 			if (!bio_add_page(bio, bvec.bv_page, bvec.bv_len,
 					  bvec.bv_offset))
-				goto drain_io;
+				goto submit_bio_retry;
 
 			last_pa = cur + bvec.bv_len;
 			bypass = false;

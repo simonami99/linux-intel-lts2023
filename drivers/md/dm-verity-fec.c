@@ -60,8 +60,8 @@ static int fec_decode_rs8(struct dm_verity *v, struct dm_verity_fec_io *fio,
  * to the data block. Caller is responsible for releasing buf.
  */
 static u8 *fec_read_parity(struct dm_verity *v, u64 rsb, int index,
-			   unsigned int *offset, unsigned int par_buf_offset,
-			  struct dm_buffer **buf)
+			   unsigned int *offset, struct dm_buffer **buf,
+			   unsigned int par_buf_offset, unsigned short ioprio)
 {
 	u64 position, block, rem;
 	u8 *res;
@@ -134,9 +134,9 @@ static int fec_decode_bufs(struct dm_verity *v, struct dm_verity_io *io,
 	struct dm_buffer *buf;
 	unsigned int n, i, offset, par_buf_offset = 0;
 	u8 *par, *block, par_buf[DM_VERITY_FEC_RSM - DM_VERITY_FEC_MIN_RSN];
+	struct bio *bio = dm_bio_from_per_bio_data(io, v->ti->per_io_data_size);
 
-	par = fec_read_parity(v, rsb, block_offset, &offset,
-			      par_buf_offset, &buf);
+	par = fec_read_parity(v, rsb, block_offset, &offset, &buf, par_buf_offset, bio_prio(bio));
 	if (IS_ERR(par))
 		return PTR_ERR(par);
 
@@ -173,8 +173,7 @@ static int fec_decode_bufs(struct dm_verity *v, struct dm_verity_io *io,
 		if (offset >= v->fec->io_size) {
 			dm_bufio_release(buf);
 
-			par = fec_read_parity(v, rsb, block_offset, &offset,
-					      par_buf_offset, &buf);
+			par = fec_read_parity(v, rsb, block_offset, &offset, &buf, par_buf_offset, bio_prio(bio));
 			if (IS_ERR(par))
 				return PTR_ERR(par);
 		}
