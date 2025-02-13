@@ -270,11 +270,11 @@ struct virtio_gpu_flush_sprite {
 
 #define MAX_SUPPORT_CMD 6
 struct virtio_gpu_cmd {
-	uint32_t cmd;
-	uint32_t size;
+	u32 cmd;
+	u32 size;
 	union {
-		uint64_t data64[8];
-		uint32_t data32[16];
+		u64 data64[8];
+		u32 data32[16];
 	};
 };
 
