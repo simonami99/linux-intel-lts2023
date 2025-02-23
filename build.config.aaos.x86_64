@@ -1,0 +1,25 @@
+KERNEL_DIR=common
+
+. ${ROOT_DIR}/${KERNEL_DIR}/build.config.common
+. ${ROOT_DIR}/${KERNEL_DIR}/build.config.gki
+. ${ROOT_DIR}/${KERNEL_DIR}/build.config.x86_64
+
+DEFCONFIG=aaos_x86_64_gki_defconfig
+
+PRE_DEFCONFIG_CMDS="mkdir -p \${OUT_DIR}/arch/x86/configs && \
+    KCONFIG_CONFIG=\${OUT_DIR}/arch/x86/configs/${DEFCONFIG} \
+        ${ROOT_DIR}/${KERNEL_DIR}/scripts/kconfig/merge_config.sh -m -r \
+        ${ROOT_DIR}/${KERNEL_DIR}/arch/x86/configs/gki_defconfig \
+        ${ROOT_DIR}/${KERNEL_DIR}/arch/x86/configs/aaos_device.fragment && \
+    true"
+POST_DEFCONFIG_CMDS=""
+
+BUILD_INITRAMFS=1
+LZ4_RAMDISK=1
+
+# Not building/saving any kernel images. This build step is meant purely to generate the .kos.
+FILES=""
+
+# Enforce to clean vendor_dlkm.img from GKI modules to save some space.
+#TRIM_UNUSED_MODULES=1
+
