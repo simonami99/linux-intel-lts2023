@@ -525,6 +525,8 @@ static void vf_show_runtime_info(struct intel_iov *iov)
 
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
 
+	if (!vf_regs) return;
+
 	for (; size--; vf_regs++) {
 		IOV_DEBUG(iov, "RUNTIME reg[%#x] = %#x\n",
 			  vf_regs->offset, vf_regs->value);
