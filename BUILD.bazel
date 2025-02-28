@@ -185,9 +185,29 @@ define_common_kernels(target_configs = {
     },
 })
 
+filegroup(
+    name = "common_sources",
+    srcs = glob(
+        [
+            "*",
+        ],
+        exclude = [
+            "BUILD.bazel",
+        ],
+    ),
+)
+
+filegroup(
+    name = "aaos_device_x86_64_common_sources",
+    srcs = [
+        ":common_sources",
+        "//common:kernel_x86_64_sources",
+    ],
+)
+
 kernel_build(
     name = "aaos_device_x86_64",
-    srcs = ["//common:kernel_x86_64_sources"],
+    srcs = [":aaos_device_x86_64_common_sources"],
     outs = [],
     arch = "x86_64",
     base_kernel = "//common:kernel_x86_64",
