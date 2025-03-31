@@ -77,7 +77,7 @@ int virtpxp_register_intel_gpu_device(int device_idx, int device_vfid, void *gpu
 void virtpxp_unregister_intel_gpu_device(int device_idx, int device_vfid, void *gpu_priv);
 int virtio_pxp_init(void);
 void virtio_pxp_exit(void);
-#elif
+#else
 void put_virtio_pxp(struct virtio_pxp *vpxp)
 {
 }
