@@ -843,12 +843,9 @@ static int virtio_camera_setup_vqs(struct virtio_device *vdev,
 	names = kmalloc_array(vcam->nvqs, sizeof(names[0]), GFP_KERNEL);
 	if (!vqs || !callbacks || !names) {
 		pr_err("%s: virtio_camera failed alloc mem.\n", __func__);
-		if (!vqs)
-			kfree(vqs);
-		if (!callbacks)
-			kfree(callbacks);
-		if (!names)
-			kfree(names);
+		kfree(vqs);
+		kfree(callbacks);
+		kfree(names);
 
 		return -ENOMEM;
 	}
